@@ -5,10 +5,11 @@ import React, { useEffect, useState } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
-import { LoadingSpinner } from "@/components/atoms/LoadingSpinner";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { useForm } from "react-hook-form";
 import { ILoginRequest } from "@/types/IUser";
 import { IoLogoGoogle, IoLogoMicrosoft } from "react-icons/io5";
+import BackendTest from "@/components/BackendTest";
 
 
 const LoginPage = () => {
@@ -51,6 +52,7 @@ useEffect(() => {
 
     return (
       <Layout>
+        <BackendTest />
         <div className="relative bg-white bg-opacity-15 backdrop-blur-lg p-8 rounded-lg shadow-lg max-w-sm w-full border-2 border-transparent animate-border-gradient">
           <h2 className="text-white text-xl font-semibold text-center mb-4 select-none">Login</h2>
           <form onSubmit={handleSubmit(onSubmit)}>

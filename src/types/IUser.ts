@@ -19,6 +19,12 @@ export interface ILoginRequest {
   }
 
 export interface ILoginResponse {
+    id: string,
+    name: string,
+    userName: string,
+    email: string,
+    biography: string,
+    profileImageUrl: string,
     success: boolean,
     token: string,
     errors: [],

@@ -49,7 +49,7 @@ const ChatItem: React.FC<ChatItemProps> = React.memo(({
           src={participantImage}
           alt={participantName}
           name={participantName}
-          className="w-10 h-10"
+          className="w-11 h-11 ring-2 ring-slate-600/40 hover:ring-blue-500/60 transition-all duration-200 shadow-md"
           fallbackClassName="bg-gradient-to-r from-blue-500 to-purple-600"
         />
         {/* TODO: Add online status when available from backend */}

@@ -10,6 +10,7 @@ import { useSession } from 'next-auth/react';
 import { AiFillHeart, AiOutlineHeart } from 'react-icons/ai';
 import LikeService from '@/services/LikeService';
 import CommentService from '@/services/CommentService';
+import FollowerService from '@/services/FollowerService';
 import { LoadingButton, LoadingSpinner } from '@/components/ui/loading';
 import { UserAvatar } from '@/components/ui/user-avatar';
 
@@ -43,6 +44,7 @@ const Post: React.FC<PostProps> = React.memo(({ post }) => {
   const [isLikeLoading, setIsLikeLoading] = useState(false);
   const [likeCommentLoading, setLikeCommentLoading] = useState<string | null>(null);
   const [isAddingComment, setIsAddingComment] = useState(false);
+  const [isFollowLoading, setIsFollowLoading] = useState(false);
 
   const handleLike = async () => {
     if (!session?.user?.id || isLikeLoading) return;
@@ -75,19 +77,16 @@ const Post: React.FC<PostProps> = React.memo(({ post }) => {
   };
 
   const handleFollow = async () => {
-    if (!session?.user?.id) return;
+    if (!session?.user?.id || isFollowLoading) return;
     
+    setIsFollowLoading(true);
     try {
-      if (isFollowing) {
-        // Unfollow logic - this would need a follower endpoint
-        console.log('Unfollow functionality needs to be implemented');
-      } else {
-        // Follow logic - this would need a follower endpoint
-        console.log('Follow functionality needs to be implemented');
-      }
+      await FollowerService.toggleFollow(post.userId, isFollowing);
       setIsFollowing(!isFollowing);
     } catch (error) {
       console.error('Erro ao processar follow:', error);
+    } finally {
+      setIsFollowLoading(false);
     }
   };
 
@@ -160,6 +159,11 @@ const Post: React.FC<PostProps> = React.memo(({ post }) => {
     router.push(`/profile/${sanitizedUsername}`);
   };
 
+  const handleMessage = () => {
+    // Navegar para a tela de chat com este usuário
+    router.push(`/chat?user=${post.userName}`);
+  };
+
   const openModal = (index: number) => {
     setCurrentImageIndex(index);
     setModalOpen(true);
@@ -195,7 +199,7 @@ const Post: React.FC<PostProps> = React.memo(({ post }) => {
                 src={post.userImage}
                 alt={post.name}
                 name={post.name}
-                className="w-12 h-12 ring-2 ring-slate-600 hover:ring-blue-500 transition-all duration-200"
+                className="w-12 h-12 ring-2 ring-slate-600/50 hover:ring-blue-500/70 transition-all duration-200 shadow-lg"
               />
             </div>
             <div className="flex-1">
@@ -215,16 +219,29 @@ const Post: React.FC<PostProps> = React.memo(({ post }) => {
                   )}
                 </div>
                 {!isOwnPost && (
-                  <Button 
-                    onClick={handleFollow} 
-                    className={`text-sm px-4 py-1.5 h-auto rounded-full font-medium transition-all duration-200 ${
-                      isFollowing 
-                        ? 'bg-slate-600 text-white hover:bg-red-500 hover:text-white' 
-                        : 'bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700'
-                    }`}
-                  >
-                    {isFollowing ? 'Seguindo' : 'Seguir'}
-                  </Button>
+                  <div className="flex items-center space-x-2">
+                    <LoadingButton
+                      onClick={handleFollow}
+                      isLoading={isFollowLoading}
+                      className={`text-sm px-4 py-1.5 h-auto rounded-full font-medium transition-all duration-200 ${
+                        isFollowing 
+                          ? 'bg-slate-600 text-white hover:bg-red-500 hover:text-white' 
+                          : 'bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700'
+                      }`}
+                    >
+                      {!isFollowLoading && (isFollowing ? 'Seguindo' : 'Seguir')}
+                    </LoadingButton>
+                    
+                    <Button
+                      onClick={handleMessage}
+                      className="text-sm px-3 py-1.5 h-auto rounded-full font-medium bg-slate-700 hover:bg-slate-600 text-white transition-all duration-200"
+                      title="Enviar mensagem"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                    </Button>
+                  </div>
                 )}
               </div>
               <p className="mt-3 text-slate-100 leading-relaxed">{post.content}</p>
@@ -336,7 +353,7 @@ const Post: React.FC<PostProps> = React.memo(({ post }) => {
                         src={comment.userImage}
                         alt={comment.name}
                         name={comment.name}
-                        className="w-8 h-8 ring-1 ring-slate-600 hover:ring-blue-500 transition-all duration-200"
+                        className="w-9 h-9 ring-2 ring-slate-600/40 hover:ring-blue-500/60 transition-all duration-200 shadow-md"
                       />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -379,10 +396,11 @@ const Post: React.FC<PostProps> = React.memo(({ post }) => {
           
           {/* Comment Input */}
           <div className="flex items-center space-x-3 p-4 bg-slate-700/20 rounded-lg">
-            <img
-              src={session?.user?.image || 'https://github.com/shadcn.png'}
+            <UserAvatar
+              src={session?.user?.image}
               alt="Seu avatar"
-              className="w-8 h-8 rounded-full ring-1 ring-slate-600"
+              name={session?.user?.name}
+              className="w-9 h-9 ring-2 ring-slate-600/40 shadow-md"
             />
             <div className="flex-1 flex items-center space-x-2">
               <input

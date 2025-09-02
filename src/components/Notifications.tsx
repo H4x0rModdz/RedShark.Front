@@ -4,44 +4,23 @@ import React, { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-// Using simple icons instead of heroicons
 import NotificationService from '@/services/NotificationService';
 import ConnectionStatus from '@/components/ConnectionStatus';
 import { INotification } from '@/types/INotification';
+import { useAppData } from '@/components/AppLoader';
 
 const Notifications: React.FC = () => {
   const { data: session } = useSession();
-  const [notifications, setNotifications] = useState<INotification[]>([]);
+  const { notifications, notificationsLoading, signalRConnected, loadNotifications } = useAppData();
   const [isOpen, setIsOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [isRealTime, setIsRealTime] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
 
-  const fetchNotifications = async () => {
-    if (!session?.user?.id) return;
-    
-    setLoading(true);
-    try {
-      const data = await NotificationService.getAllNotifications();
-      setNotifications(data);
-      setUnreadCount(data.filter(n => !n.isRead).length);
-    } catch (error) {
-      console.error('Erro ao buscar notificações:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const unreadCount = notifications?.filter(n => !n.isRead).length || 0;
 
   const markAsRead = async (notificationId: string) => {
     try {
       await NotificationService.markAsRead(notificationId);
-      setNotifications(prev => 
-        prev.map(n => 
-          n.id === notificationId ? { ...n, isRead: true } : n
-        )
-      );
-      setUnreadCount(prev => Math.max(0, prev - 1));
+      // Reload notifications after marking as read
+      loadNotifications();
     } catch (error) {
       console.error('Erro ao marcar notificação como lida:', error);
     }
@@ -49,12 +28,12 @@ const Notifications: React.FC = () => {
 
   const markAllAsRead = async () => {
     try {
-      const unreadNotifications = notifications.filter(n => !n.isRead);
+      const unreadNotifications = notifications?.filter(n => !n.isRead) || [];
       await Promise.all(
         unreadNotifications.map(n => NotificationService.markAsRead(n.id))
       );
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-      setUnreadCount(0);
+      // Reload notifications after marking all as read
+      loadNotifications();
     } catch (error) {
       console.error('Erro ao marcar todas como lidas:', error);
     }
@@ -74,121 +53,12 @@ const Notifications: React.FC = () => {
     return date.toLocaleDateString('pt-BR');
   };
 
-  useEffect(() => {
-    fetchNotifications();
-    
-    // Only attempt SignalR in production or when explicitly enabled
-    const enableRealTime = process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_ENABLE_SIGNALR === 'true';
-    
-    if (!enableRealTime) {
-      console.log("SignalR desabilitado - usando polling para notificações");
-      setIsRealTime(false);
-      setIsConnected(false);
-      
-      // Set up polling as fallback
-      const interval = setInterval(() => {
-        if (session?.user?.id) {
-          fetchNotifications();
-        }
-      }, 30000); // Poll every 30 seconds
-      
-      return () => clearInterval(interval);
-    }
-    
-    // Start SignalR connection for real-time notifications
-    let connection: any = null;
-    let mounted = true;
-    
-    const startSignalRConnection = async () => {
-      if (!session?.user?.id || !mounted) return;
-      
-      // Check if backend is available first
-      try {
-        const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-        
-        // Test if the hub endpoint exists
-        const response = await fetch(`${baseUrl}/api/health`, { 
-          method: 'GET',
-          signal: AbortSignal.timeout(5000) // 5 second timeout
-        }).catch(() => null);
-        
-        if (!response || !response.ok) {
-          console.log("Backend não disponível - usando polling para notificações");
-          setIsRealTime(false);
-          setIsConnected(false);
-          
-          // Fallback to polling
-          const interval = setInterval(() => {
-            if (session?.user?.id && mounted) {
-              fetchNotifications();
-            }
-          }, 30000);
-          
-          return () => clearInterval(interval);
-        }
-        
-        connection = await NotificationService.startConnection(
-          baseUrl,
-          session.user.id,
-          session.user.token || ''
-        );
-        
-        if (connection && mounted) {
-          setIsRealTime(true);
-          setIsConnected(true);
-          
-          connection.on("ReceiveNotification", (message: string) => {
-            console.log("Nova notificação recebida:", message);
-            // Refresh notifications when new one arrives
-            if (mounted) {
-              fetchNotifications();
-            }
-          });
-        } else {
-          setIsRealTime(false);
-          setIsConnected(false);
-        }
-      } catch (error) {
-        console.log("SignalR não disponível - usando polling:", error);
-        setIsRealTime(false);
-        setIsConnected(false);
-        
-        // Fallback to polling
-        if (mounted) {
-          const interval = setInterval(() => {
-            if (session?.user?.id && mounted) {
-              fetchNotifications();
-            }
-          }, 30000);
-          
-          return () => clearInterval(interval);
-        }
-      }
-    };
-    
-    startSignalRConnection();
-    
-    // Cleanup function
-    return () => {
-      mounted = false;
-      if (connection) {
-        try {
-          connection.off("ReceiveNotification");
-          connection.stop().catch(() => {
-            // Ignore errors on cleanup
-          });
-        } catch (error) {
-          // Ignore errors on cleanup
-        }
-      }
-    };
-  }, [session]);
 
   if (!session) return null;
 
   return (
     <>
-      <ConnectionStatus isRealTime={isRealTime} isConnected={isConnected} />
+      <ConnectionStatus isRealTime={signalRConnected} isConnected={signalRConnected} />
       <div className="relative">
         <Button
         onClick={() => setIsOpen(!isOpen)}
@@ -241,11 +111,11 @@ const Notifications: React.FC = () => {
               </div>
 
               <div className="divide-y divide-gray-700">
-                {loading ? (
+                {notificationsLoading ? (
                   <div className="p-4 text-center text-gray-400">
                     Carregando...
                   </div>
-                ) : notifications.length === 0 ? (
+                ) : !notifications || notifications.length === 0 ? (
                   <div className="p-4 text-center text-gray-400">
                     Nenhuma notificação
                   </div>

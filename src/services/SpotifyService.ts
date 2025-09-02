@@ -1,4 +1,4 @@
-import { IISpotifyTrack, IISpotifyArtist, IISpotifyPlaylist } from '@/types/ISpotify';
+import { ISpotifyTrack, ISpotifyArtist, ISpotifyPlaylist } from '@/types/ISpotify';
 
 class SpotifyService {
   private accessToken: string | null = null;
@@ -45,7 +45,7 @@ class SpotifyService {
       this.accessToken = data.access_token;
       this.tokenExpiry = Date.now() + (data.expires_in * 1000) - 60000; // Subtract 1 minute for safety
 
-      return this.accessToken;
+      return this.accessToken || '';
     } catch (error) {
       console.error('Error getting Spotify access token:', error);
       throw error;
@@ -122,15 +122,6 @@ class SpotifyService {
     } catch (error) {
       console.error('Error getting artist top tracks:', error);
       return [];
-    }
-  }
-
-  async getTrack(trackId: string): Promise<ISpotifyTrack | null> {
-    try {
-      return await this.makeSpotifyRequest(`/tracks/${trackId}`);
-    } catch (error) {
-      console.error('Error getting track:', error);
-      return null;
     }
   }
 

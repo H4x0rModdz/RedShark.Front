@@ -1,202 +1,67 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useOptimizedSession } from '@/hooks/useOptimizedSession';
+import React, { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
 import { IChat } from '@/types/IChat';
 import { IChatMessage } from '@/types/IChatMessage';
 import ChatService from '@/services/ChatService';
-import { useSimpleCache } from '@/hooks/useSimpleCache';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { ChatListSkeleton, MessageSkeleton } from '@/components/ui/skeletons';
-import { NotificationService } from '@/services/NotificationService';
+import { useAppData } from '@/components/AppLoader';
 
 const RightSidebar = () => {
-  const { session, isAuthenticated } = useOptimizedSession();
+  const { data: session } = useSession();
+  const { chats, chatsLoading } = useAppData();
   const [isMinimized, setIsMinimized] = useState(false);
   const [activeChat, setActiveChat] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<IChatMessage[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
-  const [signalRConnection, setSignalRConnection] = useState<any>(null);
 
-  // Cached fetch for user chats
-  const {
-    data: chats,
-    loading,
-    error: chatsError
-  } = useSimpleCache(
-    isAuthenticated ? `user-chats-${session?.user?.id}` : '',
-    () => ChatService.getUserChats(),
-    2 * 60 * 1000 // 2 minutes cache
-  );
-
-  // Cached fetch for chat messages
-  const {
-    data: cachedMessages,
-    loading: messagesLoadingCached,
-    error: messagesError
-  } = useSimpleCache(
-    activeChat ? `chat-messages-${activeChat}` : '',
-    () => ChatService.getChatMessages(activeChat!, 1, 50),
-    1 * 60 * 1000 // 1 minute cache
-  );
-
-  // Update local messages state when cached data changes
+  // Load messages when activeChat changes
   useEffect(() => {
-    if (cachedMessages) {
-      setMessages(cachedMessages);
-    } else if (!activeChat) {
+    if (activeChat) {
+      loadMessages(activeChat);
+    } else {
       setMessages([]);
     }
-    setMessagesLoading(messagesLoadingCached);
-  }, [cachedMessages, activeChat, messagesLoadingCached]);
+  }, [activeChat]);
 
-  // POLLING METHOD (COMMENTED OUT - WORKING BACKUP)
-  // useEffect(() => {
-  //   if (!isAuthenticated || !session?.user?.id || !activeChat) return;
-  //   
-  //   let mounted = true;
-  //   
-  //   // Poll for new messages every 3 seconds
-  //   const pollMessages = async () => {
-  //     if (!mounted || !activeChat) return;
-  //     
-  //     try {
-  //       const latestMessages = await ChatService.getChatMessages(activeChat, 1, 20);
-  //       if (mounted && latestMessages.length > messages.length) {
-  //         // Only update if we have more messages than currently displayed
-  //         setMessages(latestMessages);
-  //       }
-  //     } catch (error) {
-  //       console.error('Error polling chat messages:', error);
-  //     }
-  //   };
-  //   
-  //   // Initial poll
-  //   pollMessages();
-  //   
-  //   // Set up interval for polling
-  //   const interval = setInterval(pollMessages, 3000); // Poll every 3 seconds
-  //   
-  //   return () => {
-  //     mounted = false;
-  //     clearInterval(interval);
-  //   };
-  // }, [isAuthenticated, session?.user?.id, activeChat, messages.length]);
-
-  // SMART REAL-TIME CHAT - Try SignalR, fallback to polling
+  // Listen for new messages from SignalR
   useEffect(() => {
-    if (!isAuthenticated || !session?.user?.id || !activeChat) return;
-    
-    let mounted = true;
-    let interval: NodeJS.Timeout | null = null;
-    
-    // Try SignalR first (silently)
-    const trySignalR = async () => {
-      if (!mounted) return false;
+    const handleNewMessage = (event: CustomEvent) => {
+      console.log('🎯 RightSidebar received newChatMessage event:', event.detail);
+      const { chatId, messageData } = event.detail;
+      console.log('🎯 Event chatId:', chatId, 'activeChat:', activeChat);
       
-      try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://localhost:7080';
-        const connection = await NotificationService.startConnection(baseUrl, session.user.id, session.user.token);
-        
-        if (connection && mounted && connection.state === 'Connected') {
-          console.log('✅ Real-time chat enabled (SignalR)');
-          
-          connection.on("ReceiveChatMessage", (messageData: any) => {
-            console.log('🔔 SignalR message received:', messageData);
-            console.log('🆔 Message chatId:', messageData.chatId, 'Active chat:', activeChat);
-            
-            // WORKAROUND: Compare using truncated precision due to JavaScript number limits
-            const messageChatIdStr = String(messageData.chatId);
-            const activeChatIdStr = String(activeChat);
-            
-            // Compare first 15 digits (safe precision range for JavaScript numbers)
-            const messagePrefix = messageChatIdStr.substring(0, 15);
-            const activePrefix = activeChatIdStr.substring(0, 15);
-            const idsMatch = messagePrefix === activePrefix;
-            
-            console.log('🔍 Precision workaround - comparing prefixes:');
-            console.log('  Message prefix:', messagePrefix);
-            console.log('  Active prefix:', activePrefix);
-            console.log('  Match:', idsMatch);
-            
-            if (mounted && idsMatch) {
-              console.log('✅ Adding message to active chat');
-              const newMessage: IChatMessage = {
-                id: messageData.id || String(Date.now()),
-                content: messageData.content,
-                chatId: messageData.chatId,
-                userId: messageData.userId,
-                userName: messageData.userName,
-                createdAt: messageData.createdAt
-              };
-              
-              console.log('🚀 Calling setMessages with new message:', newMessage);
-              setMessages(prev => {
-                console.log('📝 Previous messages count:', prev.length);
-                const newList = [...prev, newMessage];
-                console.log('📝 New messages count:', newList.length);
-                return newList;
-              });
-            }
-          });
-          
-          return true; // SignalR working
-        }
-      } catch (error) {
-        // SignalR failed silently
-      }
-      
-      return false; // SignalR not working
-    };
-    
-    // Fallback to smart polling
-    const startPolling = () => {
-      if (!mounted || !activeChat) return;
-      
-      console.log('📡 Real-time chat enabled (polling)');
-      
-      const pollMessages = async () => {
-        if (!mounted || !activeChat) return;
-        
-        try {
-          const latestMessages = await ChatService.getChatMessages(activeChat, 1, 50);
-          if (mounted && latestMessages.length > messages.length) {
-            setMessages(latestMessages);
-          }
-        } catch (error) {
-          // Polling failed silently
-        }
-      };
-      
-      // Poll every 2 seconds for good responsiveness
-      interval = setInterval(pollMessages, 2000);
-    };
-    
-    // Try SignalR first, then fallback
-    trySignalR().then(signalRWorking => {
-      if (!signalRWorking) {
-        startPolling();
-      }
-    });
-    
-    return () => {
-      mounted = false;
-      if (interval) {
-        clearInterval(interval);
-      }
-      
-      const connection = NotificationService.getConnection();
-      if (connection) {
-        try {
-          connection.off("ReceiveChatMessage");
-        } catch (error) {
-          // Ignore cleanup errors
-        }
+      // Only update if it's for the currently active chat
+      if (activeChat && chatId === activeChat) {
+        console.log('🎯 Adding message to active chat!');
+        setMessages(prev => {
+          const updated = [...prev, messageData];
+          console.log('🎯 Updated messages:', updated);
+          return updated;
+        });
+      } else {
+        console.log('🎯 Message not for active chat, ignoring');
       }
     };
-  }, [isAuthenticated, session?.user?.id, activeChat, messages.length]);
 
-  // No need to join/leave chat groups - backend sends to all users in chat
-  // SignalR will receive messages automatically like notifications
+    console.log('🎯 RightSidebar setting up event listener for activeChat:', activeChat);
+    window.addEventListener('newChatMessage', handleNewMessage as EventListener);
+    return () => window.removeEventListener('newChatMessage', handleNewMessage as EventListener);
+  }, [activeChat]);
+
+  const loadMessages = async (chatId: string) => {
+    if (!chatId) return;
+    setMessagesLoading(true);
+    try {
+      const chatMessages = await ChatService.getChatMessages(chatId, 1, 50);
+      setMessages(chatMessages);
+    } catch (error) {
+      console.error('Error loading messages:', error);
+    } finally {
+      setMessagesLoading(false);
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!message.trim() || !activeChat) return;
@@ -208,8 +73,6 @@ const RightSidebar = () => {
       
       setMessages(prev => [...prev, newMessage]);
       setMessage('');
-      
-      // Note: Chat list update would need refetch or state management
     } catch (error) {
       console.error('Error sending message:', error);
     }
@@ -237,21 +100,17 @@ const RightSidebar = () => {
   };
 
   const getParticipantName = (chat: IChat): string => {
-    // Check if it's a direct chat (2 participants) or group chat (more than 2)
     const isDirectChat = chat.participants && chat.participants.length === 2;
     
     if (!isDirectChat) {
-      // For group chats, show the chat name
       return chat.name;
     }
     
-    // For direct chats, show the other participant's name
     const otherParticipant = chat.participants?.find(p => p.userId !== session?.user?.id);
     return otherParticipant?.name || chat.name;
   };
 
   const getParticipantImage = (chat: IChat): string | null => {
-    // Check if it's a direct chat (2 participants)
     const isDirectChat = chat.participants && chat.participants.length === 2;
     
     if (!isDirectChat) return null;
@@ -260,10 +119,9 @@ const RightSidebar = () => {
     return otherParticipant?.profileImageUrl || null;
   };
 
-
   const selectedChat = chats?.find(chat => chat.id === activeChat);
 
-  if (!isAuthenticated) return null;
+  if (!session?.user?.id) return null;
 
   return (
     <aside className={`fixed right-0 top-0 border-l border-slate-700/50 h-screen bg-slate-900/50 backdrop-blur-xl hidden lg:block transition-all duration-300 ${isMinimized ? 'w-16' : 'w-80'}`}>
@@ -288,7 +146,7 @@ const RightSidebar = () => {
             {!activeChat ? (
               /* Chat List */
               <div className="flex-1 overflow-y-auto">
-                {loading ? (
+                {chatsLoading ? (
                   <ChatListSkeleton count={4} />
                 ) : !chats || chats.length === 0 ? (
                   <div className="text-center text-slate-400 py-8">
@@ -315,7 +173,6 @@ const RightSidebar = () => {
                               className="w-10 h-10"
                               fallbackClassName="bg-gradient-to-r from-blue-500 to-purple-600"
                             />
-                            {/* TODO: Add online status when available from backend */}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between">
@@ -355,16 +212,26 @@ const RightSidebar = () => {
                   <div className="flex items-center space-x-2">
                     {selectedChat && (
                       <>
-                        <UserAvatar
-                          src={getParticipantImage(selectedChat)}
-                          alt={getParticipantName(selectedChat)}
-                          name={getParticipantName(selectedChat)}
-                          className="w-8 h-8"
-                          fallbackClassName="bg-gradient-to-r from-blue-500 to-purple-600"
-                        />
-                        <span className="font-medium text-white">
-                          {getParticipantName(selectedChat)}
-                        </span>
+                        <div 
+                          className="flex items-center space-x-2 cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => {
+                            const otherParticipant = selectedChat.participants?.find(p => p.userId !== session?.user?.id);
+                            if (otherParticipant?.userName) {
+                              window.location.href = `/profile/${otherParticipant.userName}`;
+                            }
+                          }}
+                        >
+                          <UserAvatar
+                            src={getParticipantImage(selectedChat)}
+                            alt={getParticipantName(selectedChat)}
+                            name={getParticipantName(selectedChat)}
+                            className="w-8 h-8"
+                            fallbackClassName="bg-gradient-to-r from-blue-500 to-purple-600"
+                          />
+                          <span className="font-medium text-white">
+                            {getParticipantName(selectedChat)}
+                          </span>
+                        </div>
                       </>
                     )}
                   </div>
@@ -383,17 +250,50 @@ const RightSidebar = () => {
                   ) : (
                     messages.map((msg) => {
                       const isMe = msg.userId === session?.user?.id;
+                      const isGroupChat = selectedChat && selectedChat.participants && selectedChat.participants.length > 2;
                       
                       return (
                         <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`max-w-xs px-3 py-2 rounded-lg ${
-                            isMe 
-                              ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white' 
-                              : 'bg-slate-800/50 text-white'
-                          }`}>
-                            <p className="text-sm">{msg.content}</p>
-                            <p className="text-xs opacity-70 mt-1">{formatTime(msg.createdAt)}</p>
-                          </div>
+                          {!isMe && isGroupChat && (
+                            <div className="flex items-start space-x-2">
+                              <div 
+                                className="flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+                                onClick={() => {
+                                  const userNameToVisit = msg.userName;
+                                  if (userNameToVisit) {
+                                    window.location.href = `/profile/${userNameToVisit}`;
+                                  }
+                                }}
+                              >
+                                <UserAvatar
+                                  src={msg.userProfileImage || msg.userProfileImageUrl || null}
+                                  alt={msg.name || msg.userName || 'Usuário'}
+                                  name={msg.name || msg.userName || 'Usuário'}
+                                  className="w-8 h-8"
+                                  fallbackClassName="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-xs font-bold flex items-center justify-center"
+                                />
+                              </div>
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-xs text-slate-400 mb-1 font-medium">
+                                  {msg.name || msg.userName || 'Usuário'}
+                                </span>
+                                <div className="bg-slate-800/50 text-white max-w-xs px-3 py-2 rounded-lg">
+                                  <p className="text-sm">{msg.content}</p>
+                                  <p className="text-xs opacity-70 mt-1">{formatTime(msg.createdAt)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {(isMe || !isGroupChat) && (
+                            <div className={`max-w-xs px-3 py-2 rounded-lg ${
+                              isMe 
+                                ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white' 
+                                : 'bg-slate-800/50 text-white'
+                            }`}>
+                              <p className="text-sm">{msg.content}</p>
+                              <p className="text-xs opacity-70 mt-1">{formatTime(msg.createdAt)}</p>
+                            </div>
+                          )}
                         </div>
                       );
                     })

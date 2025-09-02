@@ -101,10 +101,15 @@ export const PostService = {
   /**
    * Gets all posts with pagination
    */
-  async getAllPosts(pageNumber: number = 1, pageSize: number = 10): Promise<IPost[]> {
+  async getAllPosts(pageNumber: number = 1, pageSize: number = 10, currentUserId?: string): Promise<IPost[]> {
     try {
+      const params: any = { pageNumber, pageSize };
+      if (currentUserId) {
+        params.currentUserId = currentUserId;
+      }
+      
       const response = await api.get(endpoint, {
-        params: { pageNumber, pageSize },
+        params,
       });
       return response.data;
     } catch (error) {

@@ -30,8 +30,26 @@ const Navbar = () => {
   return (
     <header className="fixed top-0 left-0 w-full bg-slate-900/90 backdrop-blur-xl border-b border-slate-700/50 z-50 shadow-2xl">
       <div className="flex items-center justify-between px-6 py-3">
-        {/* Logo Section */}
-        <Link href="/home" className="flex items-center space-x-3">
+        {/* Mobile: Logo centered */}
+        <div className="md:hidden flex-1 flex justify-center">
+          <Link href="/home" className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+              <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c1.19 0 2.34-.21 3.41-.6.3-.11.49-.4.49-.72 0-.43-.35-.78-.78-.78-.19 0-.37.07-.5.18-.82.29-1.69.44-2.62.44-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6c0 .93-.15 1.8-.44 2.62-.11.13-.18.31-.18.5 0 .43.35.78.78.78.32 0 .61-.19.72-.49.39-1.07.6-2.22.6-3.41 0-5.52-4.48-10-10-10z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                Red Shark
+              </span>
+              <span className="text-xs text-slate-400 -mt-1">Social Network</span>
+            </div>
+          </Link>
+        </div>
+
+        {/* Desktop: Logo Section */}
+        <Link href="/home" className="hidden md:flex items-center space-x-3">
           <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
             <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c1.19 0 2.34-.21 3.41-.6.3-.11.49-.4.49-.72 0-.43-.35-.78-.78-.78-.19 0-.37.07-.5.18-.82.29-1.69.44-2.62.44-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6c0 .93-.15 1.8-.44 2.62-.11.13-.18.31-.18.5 0 .43.35.78.78.78.32 0 .61-.19.72-.49.39-1.07.6-2.22.6-3.41 0-5.52-4.48-10-10-10z"/>
@@ -63,7 +81,7 @@ const Navbar = () => {
         </div>
 
         {/* Right Section */}
-        <div className="flex items-center space-x-4">
+        <div className="hidden md:flex items-center space-x-4">
           {/* Notifications */}
           <Notifications />
 

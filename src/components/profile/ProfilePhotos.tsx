@@ -18,6 +18,7 @@ const ProfilePhotos: React.FC<ProfilePhotosProps> = ({ userId, isMobileView = fa
   const [loading, setLoading] = useState(true);
   const [photosError, setPhotosError] = useState<any>(null);
   const [selectedPhoto, setSelectedPhoto] = useState<IUserPhoto | null>(null);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number>(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
   
   useEffect(() => {
@@ -43,6 +44,8 @@ const ProfilePhotos: React.FC<ProfilePhotosProps> = ({ userId, isMobileView = fa
   const hasMorePhotos = (photos?.length || 0) > displayCount;
 
   const handlePhotoClick = (photo: IUserPhoto) => {
+    const index = photos.findIndex(p => p.id === photo.id);
+    setSelectedPhotoIndex(index);
     setSelectedPhoto(photo);
     setIsModalOpen(true);
   };
@@ -50,6 +53,20 @@ const ProfilePhotos: React.FC<ProfilePhotosProps> = ({ userId, isMobileView = fa
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedPhoto(null);
+  };
+
+  const handleNavigatePhoto = (direction: 'prev' | 'next') => {
+    if (!photos.length) return;
+    
+    let newIndex = selectedPhotoIndex;
+    if (direction === 'next') {
+      newIndex = (selectedPhotoIndex + 1) % photos.length;
+    } else {
+      newIndex = selectedPhotoIndex === 0 ? photos.length - 1 : selectedPhotoIndex - 1;
+    }
+    
+    setSelectedPhotoIndex(newIndex);
+    setSelectedPhoto(photos[newIndex]);
   };
 
   return (
@@ -115,8 +132,11 @@ const ProfilePhotos: React.FC<ProfilePhotosProps> = ({ userId, isMobileView = fa
     {/* Photo Modal */}
     <PhotoModal
       photo={selectedPhoto}
+      photos={photos}
+      currentIndex={selectedPhotoIndex}
       isOpen={isModalOpen}
       onClose={handleCloseModal}
+      onNavigate={handleNavigatePhoto}
     />
   </>
   );

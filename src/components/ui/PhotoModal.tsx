@@ -3,31 +3,49 @@ import { IUserPhoto } from '@/types/IUserPhoto';
 
 interface PhotoModalProps {
   photo: IUserPhoto | null;
+  photos?: IUserPhoto[];
+  currentIndex?: number;
   isOpen: boolean;
   onClose: () => void;
+  onNavigate?: (direction: 'prev' | 'next') => void;
 }
 
-const PhotoModal: React.FC<PhotoModalProps> = ({ photo, isOpen, onClose }) => {
-  // Handle ESC key to close modal
+const PhotoModal: React.FC<PhotoModalProps> = ({ 
+  photo, 
+  photos = [], 
+  currentIndex = 0, 
+  isOpen, 
+  onClose, 
+  onNavigate 
+}) => {
+  // Handle keyboard events
   useEffect(() => {
-    const handleEsc = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         onClose();
+      } else if (event.key === 'ArrowRight' && onNavigate) {
+        onNavigate('next');
+      } else if (event.key === 'ArrowLeft' && onNavigate) {
+        onNavigate('prev');
       }
     };
 
     if (isOpen) {
-      document.addEventListener('keydown', handleEsc);
+      document.addEventListener('keydown', handleKeyDown);
       document.body.style.overflow = 'hidden'; // Prevent background scroll
     }
 
     return () => {
-      document.removeEventListener('keydown', handleEsc);
+      document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = 'unset';
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, onNavigate]);
 
   if (!isOpen || !photo) return null;
+
+  const hasMultiplePhotos = photos.length > 1;
+  const canGoToPrev = hasMultiplePhotos;
+  const canGoToNext = hasMultiplePhotos;
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -44,26 +62,60 @@ const PhotoModal: React.FC<PhotoModalProps> = ({ photo, isOpen, onClose }) => {
     <div className="fixed inset-0 z-50">
       {/* Backdrop with blur */}
       <div 
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/80 backdrop-blur-md"
         onClick={onClose}
       />
       
       {/* Modal Container */}
       <div className="relative z-10 flex items-center justify-center min-h-full p-4">
+        {/* Navigation Arrows */}
+        {hasMultiplePhotos && onNavigate && (
+          <>
+            {/* Previous Arrow */}
+            <button
+              onClick={() => onNavigate('prev')}
+              disabled={!canGoToPrev}
+              className="absolute left-4 z-20 w-12 h-12 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center text-white transition-all duration-200 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            
+            {/* Next Arrow */}
+            <button
+              onClick={() => onNavigate('next')}
+              disabled={!canGoToNext}
+              className="absolute right-4 z-20 w-12 h-12 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center text-white transition-all duration-200 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </>
+        )}
+
         {/* Modal Content */}
         <div 
-          className="bg-slate-900 rounded-xl shadow-2xl border border-slate-700 max-w-4xl w-full max-h-[90vh] overflow-hidden"
+          className="bg-slate-900 rounded-xl shadow-2xl border border-slate-700 max-w-5xl w-full max-h-[90vh] overflow-hidden relative"
           onClick={(e) => e.stopPropagation()}
         >
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-10 w-10 h-10 bg-black/50 hover:bg-black/70 rounded-full flex items-center justify-center text-white transition-colors"
+          className="absolute top-4 right-4 z-30 w-10 h-10 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center text-white transition-colors"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
+
+        {/* Photo Counter */}
+        {hasMultiplePhotos && (
+          <div className="absolute top-4 left-4 z-30 bg-black/60 text-white px-3 py-1 rounded-full text-sm">
+            {currentIndex + 1} de {photos.length}
+          </div>
+        )}
 
         <div className="flex flex-col lg:flex-row h-full">
           {/* Image Container */}

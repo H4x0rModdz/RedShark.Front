@@ -3,10 +3,12 @@ export interface IChatMessage {
     content: string;
     chatId: string;
     userId: string;
+    name?: string;
     userName?: string;
+    userProfileImage?: string;
     userProfileImageUrl?: string;
     createdAt: string;
-    updatedAt: string;
+    updatedAt?: string;
     user?: {
         id: string;
         name: string;

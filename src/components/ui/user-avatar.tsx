@@ -30,9 +30,9 @@ const UserAvatar = React.forwardRef<
   const initials = getInitials(name || alt)
 
   return (
-    <Avatar ref={ref} className={cn(className)} {...props}>
+    <Avatar ref={ref} className={cn("ring-offset-background", className)} {...props}>
       <AvatarImage src={src || ""} alt={alt || name || "User avatar"} />
-      <AvatarFallback className={cn("bg-gradient-to-br from-slate-600 to-slate-700 text-white font-medium", fallbackClassName)}>
+      <AvatarFallback className={cn("bg-gradient-to-br from-slate-600 to-slate-700 text-white font-semibold text-sm", fallbackClassName)}>
         {initials}
       </AvatarFallback>
     </Avatar>

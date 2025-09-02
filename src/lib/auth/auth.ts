@@ -11,6 +11,9 @@ const sevenDays = 7 * 24 * 60 * 60;
 const oneDay = 24 * 60 * 60;
 const maxAge = process.env.NODE_ENV === "production" ? oneDay : sevenDays;
 
+// Configure session polling
+const sessionPollingInterval = process.env.NODE_ENV === "production" ? 5 * 60 : 0; // 5 minutes in production, disabled in dev
+
 export const authOptions: AuthOptions = {
   providers: [
     Credentials({
@@ -81,7 +84,8 @@ export const authOptions: AuthOptions = {
   ],
   session: {
     strategy: "jwt",
-    maxAge: oneDay,
+    maxAge: maxAge,
+    updateAge: 24 * 60 * 60, // Update session every 24 hours
   },
   callbacks: {
     async jwt({ token, user }) {

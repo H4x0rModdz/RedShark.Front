@@ -10,7 +10,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import FeedService from "@/services/FeedService";
 import { useSession } from "next-auth/react";
 import PostService from "@/services/PostService";
-import SessionDebug from "@/components/SessionDebug";
+import { FeedSkeleton, PostSkeleton } from "@/components/ui/skeletons";
+import { useDebounce } from "@/hooks/useDebounce";
+import FeedErrorBoundary from "@/components/FeedErrorBoundary";
 
 const HomePage = () => {
   const { data: session, status } = useSession();
@@ -64,16 +66,20 @@ const HomePage = () => {
 
       if (response.success) {
         const newPost: IPost = {
-          id: parseInt(response.postId),
-          userId: parseInt(session.user.id),
+          id: response.postId,
+          userId: session.user.id,
           content: newPostContent.trim(),
           name: session.user?.name || 'User',
           userName: session.user?.userName || session.user?.name?.toLowerCase().replace(' ', '_') || 'user',
           userImage: session.user?.image || 'https://github.com/shadcn.png',
-          likes: 0,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          likesCount: 0,
+          commentsCount: 0,
           comments: [],
           images: [],
           isFollowing: false,
+          isLiked: false,
         };
         
         setPosts((prevPosts) => [newPost, ...prevPosts]);
@@ -94,6 +100,27 @@ const HomePage = () => {
     }
   }, [session]);
 
+  // Debounce the scroll handler to avoid excessive API calls
+  const debouncedFetchFeed = useDebounce((cursor: string) => {
+    fetchFeed(cursor);
+  }, 300); // 300ms debounce
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (
+        window.innerHeight + document.documentElement.scrollTop >= 
+        document.documentElement.offsetHeight - 1000 && // Load before reaching bottom
+        !loading &&
+        nextCursor
+      ) {
+        debouncedFetchFeed(nextCursor);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [loading, nextCursor, debouncedFetchFeed]);
+
   if (status === "loading") {
     return (
       <div className="flex min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-gray-900 items-center justify-center">
@@ -107,7 +134,6 @@ const HomePage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-gray-900">
-      <SessionDebug />
       <div className="flex max-w-7xl mx-auto">
         <LeftSidebar />
         
@@ -149,6 +175,17 @@ const HomePage = () => {
                       rows={expandCreatePost ? 4 : 2}
                       value={newPostContent}
                       onChange={(e) => setNewPostContent(e.target.value)}
+                      onPaste={(e) => {
+                        const paste = (e.clipboardData || (window as any).clipboardData).getData('text');
+                        const newText = newPostContent + paste;
+                        if (newText.length > 2000) {
+                          e.preventDefault();
+                          const remainingChars = 2000 - newPostContent.length;
+                          if (remainingChars > 0) {
+                            setNewPostContent(newPostContent + paste.substring(0, remainingChars));
+                          }
+                        }
+                      }}
                       maxLength={2000}
                     />
                   </div>
@@ -234,26 +271,9 @@ const HomePage = () => {
             </CardContent>
           </Card>
 
-          {/* Modern Loading State */}
-          {loading && (
-            <Card className="mb-6 bg-slate-800/30 border-slate-700/30">
-              <CardContent className="p-6">
-                <div className="animate-pulse space-y-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-slate-600 rounded-full"></div>
-                    <div className="space-y-2 flex-1">
-                      <div className="h-4 bg-slate-600 rounded w-1/4"></div>
-                      <div className="h-3 bg-slate-700 rounded w-1/6"></div>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="h-4 bg-slate-600 rounded w-3/4"></div>
-                    <div className="h-4 bg-slate-600 rounded w-1/2"></div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {/* Loading State with Skeleton */}
+          {loading && posts.length === 0 && <FeedSkeleton count={3} />}
+          {loading && posts.length > 0 && <PostSkeleton />}
 
           {/* Posts Feed */}
           <div className="space-y-6">
@@ -277,26 +297,20 @@ const HomePage = () => {
               </Card>
             ) : (
               posts.map((post) => (
-                <div key={post.id} className="transform transition-all duration-200 hover:scale-[1.01]">
-                  <Post post={post} />
-                </div>
+                <FeedErrorBoundary key={post.id}>
+                  <div className="transform transition-all duration-200 hover:scale-[1.01]">
+                    <Post post={post} />
+                  </div>
+                </FeedErrorBoundary>
               ))
             )}
           </div>
 
-          {/* Load More Button */}
-          {nextCursor && !loading && (
+          {/* Loading indicator when auto-loading */}
+          {loading && (
             <div className="mt-8 text-center">
-              <Button
-                onClick={() => fetchFeed(nextCursor)}
-                variant="outline"
-                className="bg-transparent border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white"
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 13l-7 7-7-7m14-8l-7 7-7-7" />
-                </svg>
-                Carregar mais posts
-              </Button>
+              <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+              <p className="text-slate-400 mt-2">Carregando mais posts...</p>
             </div>
           )}
         </main>

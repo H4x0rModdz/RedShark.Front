@@ -9,64 +9,68 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { AiFillHeart, AiOutlineHeart } from 'react-icons/ai';
 import LikeService from '@/services/LikeService';
+import CommentService from '@/services/CommentService';
+import { LoadingButton, LoadingSpinner } from '@/components/ui/loading';
+import { UserAvatar } from '@/components/ui/user-avatar';
 
-const Post: React.FC<{ post: IPost }> = ({ post }) => {
+interface PostProps {
+  post: IPost;
+}
+
+const Post: React.FC<PostProps> = React.memo(({ post }) => {
   const { data: session } = useSession();
-  const [likes, setLikes] = useState(post.likes || 0);
-  const [isLiked, setIsLiked] = useState(false);
+  const [likes, setLikes] = useState(post.likesCount || 0);
+  const [isLiked, setIsLiked] = useState(post.isLiked || false);
   const [isFollowing, setIsFollowing] = useState(post.isFollowing);
   const [comments, setComments] = useState<IComment[]>(
     (post.comments || []).map(comment => ({
       ...comment,
-      isLiked: comment.isLiked || false,
-      avatar: comment.avatar || 'https://github.com/shadcn.png'
+      isLiked: comment.isLiked || false
     }))
   );
   const [newComment, setNewComment] = useState('');
-  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
-  const [isProcessingLike, setIsProcessingLike] = useState(false);
   const router = useRouter();
   
   // Check if this is the current user's post
-  const isOwnPost = session?.user?.id === post.userId?.toString();
+  const isOwnPost = session?.user?.id === post.userId;
   const isCurrentUser = session?.user?.userName === post.userName;
 
   // Estados para o modal/carousel de imagens
   const [isModalOpen, setModalOpen] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
+  // Loading states
+  const [isLikeLoading, setIsLikeLoading] = useState(false);
+  const [likeCommentLoading, setLikeCommentLoading] = useState<string | null>(null);
+  const [isAddingComment, setIsAddingComment] = useState(false);
+
   const handleLike = async () => {
-    if (!session?.user?.id || isProcessingLike) return;
+    if (!session?.user?.id || isLikeLoading) return;
     
-    setIsProcessingLike(true);
+    console.log('handleLike called with:', { 
+      postId: post.id, 
+      userIdOriginal: session.user.id, 
+      userIdParsed: parseInt(session.user.id),
+      userIdType: typeof session.user.id 
+    });
+    setIsLikeLoading(true);
     try {
-      if (isLiked) {
-        // Remove like - Note: We'd need the like ID to delete it properly
-        // For now, this is a simplified approach
-        console.log('Unlike functionality needs like ID from backend');
-        setLikes(likes - 1);
-        setIsLiked(false);
-      } else {
-        // Add like
-        await LikeService.createLike({
-          userId: session.user.id,
-          postId: post.id
-        });
-        setLikes(likes + 1);
-        setIsLiked(true);
+      const result = await LikeService.toggleLike({
+        userId: session.user.id,
+        postId: post.id
+      });
+      
+      console.log('toggleLike result:', result);
+      
+      if (result.success) {
+        setIsLiked(result.isLiked);
+        setLikes(result.likesCount);
+        console.log('State updated:', { isLiked: result.isLiked, likesCount: result.likesCount });
       }
     } catch (error) {
-      console.error('Erro ao processar like:', error);
-      // Revert optimistic update on error
-      if (isLiked) {
-        setLikes(likes + 1);
-        setIsLiked(true);
-      } else {
-        setLikes(likes - 1);
-        setIsLiked(false);
-      }
+      console.error('Erro ao curtir post:', error);
     } finally {
-      setIsProcessingLike(false);
+      setIsLikeLoading(false);
     }
   };
 
@@ -88,47 +92,67 @@ const Post: React.FC<{ post: IPost }> = ({ post }) => {
   };
 
   const handleAddComment = async () => {
-    if (!newComment.trim() || !session?.user?.id || isSubmittingComment) return;
+    if (!newComment.trim() || !session?.user?.id || isAddingComment) return;
     
-    setIsSubmittingComment(true);
+    setIsAddingComment(true);
     try {
-      // Note: Comment functionality needs to be implemented in backend
-      // For now, we'll add comments locally until the API is ready
-      const newCommentObj: IComment = {
-        id: Date.now(), // temporary ID
-        user: session.user.name || 'User',
-        userName: session.user.userName ? `@${session.user.userName}` : `@${session.user.name?.toLowerCase().replace(' ', '_')}`,
-        avatar: session.user.image || 'https://github.com/shadcn.png',
-        content: newComment.trim(),
-        likes: 0,
+      const newCommentObj = await CommentService.createComment({
+        postId: post.id,
+        content: newComment.trim()
+      });
+      
+      setComments([...comments, {
+        ...newCommentObj,
         isLiked: false,
-      };
-      
-      setComments([...comments, newCommentObj]);
+        likesCount: newCommentObj.likesCount || 0,
+        commentsCount: newCommentObj.commentsCount || 0
+      }]);
       setNewComment('');
-      
-      // TODO: Implement actual API call when Comment controller is created
-      console.log('Comment API not yet implemented - comment added locally');
     } catch (error) {
       console.error('Erro ao adicionar comentário:', error);
     } finally {
-      setIsSubmittingComment(false);
+      setIsAddingComment(false);
     }
   };
 
-  const handleLikeComment = (commentId: number) => {
-    const updatedComments = comments.map((comment) => {
-      // Se o comentário for o que foi clicado:
-      if (comment.id === commentId) {
-        // Se já foi curtido, remove o like; caso contrário, adiciona
-        const isAlreadyLiked = (comment as any).isLiked;
-        const updatedLikes = (comment.likes || 0) + (isAlreadyLiked ? -1 : 1);
-        return { ...comment, likes: updatedLikes, isLiked: !isAlreadyLiked };
-      }
-      return comment;
+  const handleLikeComment = async (commentId: string) => {
+    if (!session?.user?.id || likeCommentLoading === commentId) return;
+    
+    console.log('handleLikeComment called with:', { 
+      commentId, 
+      userIdOriginal: session.user.id, 
+      userIdParsed: parseInt(session.user.id),
+      userIdType: typeof session.user.id 
     });
-    setComments(updatedComments);
-    // Lógica para persistir a ação de like no backend
+    setLikeCommentLoading(commentId);
+    
+    try {
+      const result = await LikeService.toggleCommentLike({
+        userId: session.user.id,
+        commentId: commentId
+      });
+      
+      console.log('toggleCommentLike result:', result);
+      
+      if (result.success) {
+        setComments(prevComments => 
+          prevComments.map((comment) => {
+            if (comment.id === commentId) {
+              return { 
+                ...comment, 
+                likesCount: result.likesCount,
+                isLiked: result.isLiked
+              };
+            }
+            return comment;
+          })
+        );
+      }
+    } catch (error) {
+      console.error('Erro ao curtir comentário:', error);
+    } finally {
+      setLikeCommentLoading(null);
+    }
   };
 
   const navigateToProfile = (username: string) => {
@@ -163,17 +187,27 @@ const Post: React.FC<{ post: IPost }> = ({ post }) => {
         {/* Cabeçalho do Post */}
         <div className="flex justify-between items-center">
           <div className="flex space-x-4 flex-1">
-            <img
-              src={post.userImage}
-              alt={post.name}
-              className="w-12 h-12 rounded-full cursor-pointer ring-2 ring-slate-600 hover:ring-blue-500 transition-all duration-200"
+            <div 
               onClick={() => navigateToProfile(post.userName)}
-            />
+              className="cursor-pointer"
+            >
+              <UserAvatar
+                src={post.userImage}
+                alt={post.name}
+                name={post.name}
+                className="w-12 h-12 ring-2 ring-slate-600 hover:ring-blue-500 transition-all duration-200"
+              />
+            </div>
             <div className="flex-1">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <p className="font-bold text-white">{post.name}</p>
-                  <span className="text-slate-400">@{post.userName}</span>
+                  <span 
+                    className="text-slate-400 cursor-pointer hover:text-blue-400 transition-colors"
+                    onClick={() => navigateToProfile(post.userName)}
+                  >
+                    @{post.userName}
+                  </span>
                   {isOwnPost && (
                     <span className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-xs px-2 py-1 rounded-full font-medium">
                       Você
@@ -253,9 +287,9 @@ const Post: React.FC<{ post: IPost }> = ({ post }) => {
         {/* Ações do Post */}
         <div className="flex items-center justify-between pt-4 border-t border-slate-700/50">
           <div className="flex items-center space-x-8">
-            <Button 
+            <LoadingButton 
               onClick={handleLike} 
-              disabled={isProcessingLike}
+              isLoading={isLikeLoading}
               className={`bg-transparent text-slate-400 hover:text-red-400 disabled:opacity-50 transition-colors duration-200 flex items-center space-x-2 ${
                 isLiked ? 'text-red-400' : ''
               }`}
@@ -264,7 +298,7 @@ const Post: React.FC<{ post: IPost }> = ({ post }) => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
               </svg>
               <span className="text-sm font-medium">{likes}</span>
-            </Button>
+            </LoadingButton>
             
             <Button className="bg-transparent text-slate-400 hover:text-blue-400 transition-colors duration-200 flex items-center space-x-2">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -294,29 +328,40 @@ const Post: React.FC<{ post: IPost }> = ({ post }) => {
               <div className="space-y-4 max-h-96 overflow-y-auto">
                 {comments.map((comment) => (
                   <div key={comment.id} className="flex items-start space-x-3 p-3 bg-slate-700/30 rounded-lg">
-                    <img
-                      src={comment.avatar || 'https://github.com/shadcn.png'}
-                      alt={comment.user}
-                      className="w-8 h-8 rounded-full cursor-pointer ring-1 ring-slate-600 hover:ring-blue-500 transition-all duration-200"
+                    <div 
                       onClick={() => navigateToProfile(comment.userName)}
-                      onError={(e) => {
-                        // Fallback para imagem padrão se a imagem falhar
-                        (e.target as HTMLImageElement).src = 'https://github.com/shadcn.png';
-                      }}
-                    />
+                      className="cursor-pointer"
+                    >
+                      <UserAvatar
+                        src={comment.userImage}
+                        alt={comment.name}
+                        name={comment.name}
+                        className="w-8 h-8 ring-1 ring-slate-600 hover:ring-blue-500 transition-all duration-200"
+                      />
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-start">
                         <div className="flex items-center space-x-2">
-                          <p className="font-medium text-white text-sm">{comment.user}</p>
-                          <span className="text-slate-400 text-xs">{comment.userName}</span>
+                          <p className="font-medium text-white text-sm">{comment.name}</p>
+                          <span 
+                            className="text-slate-400 text-xs cursor-pointer hover:text-blue-400 transition-colors"
+                            onClick={() => navigateToProfile(comment.userName)}
+                          >
+                            @{comment.userName}
+                          </span>
                         </div>
                         <div className="flex items-center space-x-1">
-                          <span className="text-slate-300 text-xs">{comment.likes || 0}</span>
+                          <span className="text-slate-300 text-xs">{comment.likesCount || 0}</span>
                           <button 
                             onClick={() => handleLikeComment(comment.id)}
-                            className="p-1 hover:bg-slate-600 rounded transition-colors"
+                            disabled={likeCommentLoading === comment.id}
+                            className={`p-1 hover:bg-slate-600 rounded transition-colors ${
+                              likeCommentLoading === comment.id ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
                           >
-                            {comment.isLiked ? (
+                            {likeCommentLoading === comment.id ? (
+                              <div className="w-3 h-3 border border-slate-400 border-t-transparent rounded-full animate-spin" />
+                            ) : comment.isLiked ? (
                               <AiFillHeart className="text-red-400 text-sm" />
                             ) : (
                               <AiOutlineHeart className="text-slate-400 text-sm hover:text-red-400" />
@@ -348,20 +393,18 @@ const Post: React.FC<{ post: IPost }> = ({ post }) => {
                 placeholder="Adicionar um comentário..."
                 onKeyPress={(e) => e.key === 'Enter' && handleAddComment()}
               />
-              <Button
+              <LoadingButton
                 onClick={handleAddComment}
-                disabled={isSubmittingComment || !newComment.trim()}
-                size="sm"
-                className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 px-4"
+                isLoading={isAddingComment}
+                disabled={!newComment.trim()}
+                className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 px-4 py-1.5 rounded text-sm"
               >
-                {isSubmittingComment ? (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                ) : (
+                {!isAddingComment && (
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                   </svg>
                 )}
-              </Button>
+              </LoadingButton>
             </div>
           </div>
         </div>
@@ -399,6 +442,9 @@ const Post: React.FC<{ post: IPost }> = ({ post }) => {
       )}
     </Card>
   );
-};
+});
+
+// Add display name for debugging
+Post.displayName = 'Post';
 
 export default Post;

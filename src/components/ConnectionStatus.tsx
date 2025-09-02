@@ -9,11 +9,18 @@ interface ConnectionStatusProps {
 
 const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ isRealTime, isConnected }) => {
   const [showStatus, setShowStatus] = useState(false);
+  const [hasShownInitially, setHasShownInitially] = useState(false);
 
   useEffect(() => {
-    // Show status for a few seconds when connection changes
+    // Only show status after initial load and when there's an actual change
+    if (!hasShownInitially) {
+      setHasShownInitially(true);
+      return; // Don't show notification on first load
+    }
+
+    // Show status for a few seconds only when connection actually changes
     setShowStatus(true);
-    const timer = setTimeout(() => setShowStatus(false), 5000);
+    const timer = setTimeout(() => setShowStatus(false), 3000); // Reduced to 3 seconds
     return () => clearTimeout(timer);
   }, [isRealTime, isConnected]);
 

@@ -1,7 +1,7 @@
 import { createRequestAuthObj } from "@/lib/auth/auth";
 import axios from "axios";
 
-const baseApiUrl = process.env.NEXT_PUBLIC_URL;
+const baseApiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://localhost:7156';
 
 // Allow self-signed certificates in development
 if (process.env.NODE_ENV === 'development') {

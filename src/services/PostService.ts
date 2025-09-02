@@ -8,9 +8,9 @@ export interface CreatePostData {
 }
 
 export interface UpdatePostData {
-  postId: number;
+  postId: string;
   content: string;
-  imagesToKeep?: number[];
+  imagesToKeep?: string[];
   newImages?: File[];
 }
 
@@ -88,7 +88,7 @@ export const PostService = {
   /**
    * Deletes a post
    */
-  async deletePost(postId: number): Promise<PostResponse> {
+  async deletePost(postId: string): Promise<PostResponse> {
     try {
       const response = await api.delete(`${endpoint}/${postId}`);
       return response.data;
@@ -116,12 +116,65 @@ export const PostService = {
   /**
    * Gets a specific post by ID
    */
-  async getPostById(postId: number): Promise<IPost> {
+  async getPostById(postId: string): Promise<IPost> {
     try {
       const response = await api.get(`${endpoint}/${postId}`);
       return response.data;
     } catch (error) {
       console.error("Erro ao buscar post:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Gets posts by user ID with pagination
+   */
+  async getPostsByUserId(userId: string, pageNumber: number = 1, pageSize: number = 10): Promise<IPost[]> {
+    try {
+      const response = await api.get(`${endpoint}/user/${userId}`, {
+        params: { pageNumber, pageSize },
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Erro ao buscar posts do usuário:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Gets posts count by user ID
+   */
+  async getPostsCountByUserId(userId: string): Promise<number> {
+    try {
+      const response = await api.get(`${endpoint}/user/${userId}/count`);
+      return response.data;
+    } catch (error) {
+      console.error("Erro ao buscar contagem de posts:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Gets posts with lazy loading for modal
+   */
+  async getPostsWithLazyLoading(userId: string, currentPage: number = 1, pageSize: number = 10) {
+    try {
+      const [posts, totalCount] = await Promise.all([
+        this.getPostsByUserId(userId, currentPage, pageSize),
+        this.getPostsCountByUserId(userId)
+      ]);
+
+      const hasMore = (currentPage * pageSize) < totalCount;
+
+      return {
+        posts,
+        hasMore,
+        totalCount,
+        currentPage,
+        loadMore: () => this.getPostsByUserId(userId, currentPage + 1, pageSize)
+      };
+    } catch (error) {
+      console.error("Erro ao carregar posts com lazy loading:", error);
       throw error;
     }
   },

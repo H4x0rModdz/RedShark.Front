@@ -7,14 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 // Using simple icons instead of heroicons
 import NotificationService from '@/services/NotificationService';
 import ConnectionStatus from '@/components/ConnectionStatus';
-
-interface INotification {
-  id: number;
-  content: string;
-  isRead: boolean;
-  createdAt: string;
-  type?: string;
-}
+import { INotification } from '@/types/INotification';
 
 const Notifications: React.FC = () => {
   const { data: session } = useSession();
@@ -40,7 +33,7 @@ const Notifications: React.FC = () => {
     }
   };
 
-  const markAsRead = async (notificationId: number) => {
+  const markAsRead = async (notificationId: string) => {
     try {
       await NotificationService.markAsRead(notificationId);
       setNotifications(prev => 

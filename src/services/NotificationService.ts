@@ -1,23 +1,6 @@
 import { api } from "./api";
 import { HttpTransportType, HubConnection, HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
-
-interface INotification {
-  id: number;
-  content: string;
-  isRead: boolean;
-  createdAt: string;
-  userId: number;
-}
-
-interface CreateNotificationDto {
-  userId: number;
-  content: string;
-}
-
-interface UpdateNotificationDto {
-  id: number;
-  isRead: boolean;
-}
+import { INotification, ICreateNotificationDto, IUpdateNotificationDto } from '@/types/INotification';
 
 const endpoint = "api/Notification";
 let connection: HubConnection | null = null;
@@ -41,7 +24,7 @@ export const NotificationService = {
   /**
    * Gets a specific notification by ID
    */
-  async getNotificationById(id: number): Promise<INotification> {
+  async getNotificationById(id: string): Promise<INotification> {
     try {
       const response = await api.get(`${endpoint}/${id}`);
       return response.data;
@@ -54,7 +37,7 @@ export const NotificationService = {
   /**
    * Creates a new notification
    */
-  async createNotification(notification: CreateNotificationDto): Promise<INotification> {
+  async createNotification(notification: ICreateNotificationDto): Promise<INotification> {
     try {
       const response = await api.post(endpoint, notification);
       return response.data;
@@ -67,9 +50,9 @@ export const NotificationService = {
   /**
    * Marks a notification as read
    */
-  async markAsRead(notificationId: number): Promise<INotification> {
+  async markAsRead(notificationId: string): Promise<INotification> {
     try {
-      const updateData: UpdateNotificationDto = {
+      const updateData: IUpdateNotificationDto = {
         id: notificationId,
         isRead: true
       };
@@ -112,11 +95,12 @@ export const NotificationService = {
       
       connection = new HubConnectionBuilder()
         .withUrl(hubUrl, {
-          transport: HttpTransportType.WebSockets,
+          // Try all transports as fallback (WebSockets, ServerSentEvents, LongPolling)
+          transport: HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents | HttpTransportType.LongPolling,
           accessTokenFactory: () => Promise.resolve(token.replace(/^Bearer\\s+/i, "")),
           skipNegotiation: false,
         })
-        .configureLogging(LogLevel.Error) // Only show errors
+        .configureLogging(LogLevel.Warning) // Reduce log noise
         .withAutomaticReconnect({
           nextRetryDelayInMilliseconds: retryContext => {
             // Exponential backoff with maximum delay
@@ -163,7 +147,6 @@ export const NotificationService = {
         console.log("Entrou no grupo de usuário:", userId);
       } catch (error: any) {
         console.warn("Erro ao entrar no grupo de usuário:", error?.message);
-        // Don't fail completely if group join fails
       }
 
       return connection;

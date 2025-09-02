@@ -1,28 +1,25 @@
 "use client";
 
 import Layout from "./layout";
-import React, { useEffect, useState } from "react";
-import { signIn, useSession } from "next-auth/react";
+import React, { useState } from "react";
+import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { toast } from "react-toastify";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { useForm } from "react-hook-form";
 import { ILoginRequest } from "@/types/IUser";
 import { IoLogoGoogle, IoLogoMicrosoft } from "react-icons/io5";
-import BackendTest from "@/components/BackendTest";
+import { useToast } from "@/hooks/useToast";
+import { useAuthRedirect } from "@/hooks/useAuthRedirect";
 
 
 const LoginPage = () => {
 const [showPassword, setShowPassword] = useState(false);
-const { data: session } = useSession();
 const router = useRouter();
 const [isLoading, setLoading] = useState(false);
+const customToast = useToast();
 
-useEffect(() => {
-    if (session?.user)
-        router.push("/home");
-        toast.success("Você já está logado.");
-}, [session, router]);
+// Redirect authenticated users to home
+useAuthRedirect({ redirectIfAuthenticated: true });
 
   const {
     register,
@@ -41,18 +38,17 @@ useEffect(() => {
 
     if (response?.error) {
       console.log(response.error);
-      toast.error("Erro ao fazer login. Verifique suas credenciais e tente novamente.");
+      customToast.error("Erro ao fazer login. Verifique suas credenciais e tente novamente.");
       setLoading(false);
     } else {
       setLoading(false);
-      toast.success("Usuário logado com sucesso.");
+      customToast.success("Usuário logado com sucesso.");
       router.push("/home");
     }
   };
 
     return (
       <Layout>
-        <BackendTest />
         <div className="relative bg-white bg-opacity-15 backdrop-blur-lg p-8 rounded-lg shadow-lg max-w-sm w-full border-2 border-transparent animate-border-gradient">
           <h2 className="text-white text-xl font-semibold text-center mb-4 select-none">Login</h2>
           <form onSubmit={handleSubmit(onSubmit)}>

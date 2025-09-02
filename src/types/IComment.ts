@@ -1,9 +1,12 @@
 export interface IComment {
-    id: number;
-    user: string;
+    id: string;
+    userId: string;
+    name: string;
     userName: string;
-    avatar: string;
-    likes: number;
-    isLiked: boolean;
+    userImage: string;
     content: string;
+    createdAt: string;
+    likesCount: number;
+    commentsCount: number;
+    isLiked?: boolean;
   }

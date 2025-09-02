@@ -101,8 +101,33 @@ const LeftSidebar = () => {
           </button>
         </div>
 
-        {/* Footer Links */}
+        {/* Trends Section */}
         <div className="mt-8 pt-6 border-t border-slate-700/50">
+          <h3 className="text-lg font-bold text-white mb-4">Tendências</h3>
+          <ul className="space-y-3">
+            <li className="cursor-pointer hover:bg-slate-800/30 p-2 rounded-lg transition-colors">
+              <div className="text-slate-300 hover:text-white">
+                <p className="font-medium">#NextJs</p>
+                <p className="text-xs text-slate-500">1080 posts hoje</p>
+              </div>
+            </li>
+            <li className="cursor-pointer hover:bg-slate-800/30 p-2 rounded-lg transition-colors">
+              <div className="text-slate-300 hover:text-white">
+                <p className="font-medium">#React</p>
+                <p className="text-xs text-slate-500">1000 posts hoje</p>
+              </div>
+            </li>
+            <li className="cursor-pointer hover:bg-slate-800/30 p-2 rounded-lg transition-colors">
+              <div className="text-slate-300 hover:text-white">
+                <p className="font-medium">#TailwindCSS</p>
+                <p className="text-xs text-slate-500">831 posts hoje</p>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        {/* Footer Links */}
+        <div className="mt-6 pt-4 border-t border-slate-700/50">
           <div className="flex flex-wrap gap-4 text-xs text-slate-500">
             <a href="#" className="hover:text-slate-300 transition-colors">Termos</a>
             <a href="#" className="hover:text-slate-300 transition-colors">Privacidade</a>

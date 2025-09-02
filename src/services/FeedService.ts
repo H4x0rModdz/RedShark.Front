@@ -16,21 +16,33 @@ export const FeedService = {
         params: { userId, cursor, pageSize },
       });
       
-      // Transformar os dados do backend para o formato esperado pelo frontend
+      
+      // Otimizar transformação de dados (usar fallbacks pré-definidos)
+      const DEFAULT_AVATAR = 'https://github.com/shadcn.png';
+      
       const transformedData = {
-        posts: response.data.posts.map((post: any) => ({
-          ...post,
-          userImage: post.userImage || post.UserImage || 'https://github.com/shadcn.png',
-          comments: (post.comments || []).map((comment: any) => ({
+        posts: response.data.posts.map((post: any) => {
+          // Pre-compute repeated operations
+          const userImage = post.userImage || post.UserImage || DEFAULT_AVATAR;
+          const comments = post.comments ? post.comments.map((comment: any) => ({
             id: comment.id,
-            user: comment.name || 'User',
-            userName: comment.userName ? `@${comment.userName}` : '@user',
-            avatar: comment.userImage || 'https://github.com/shadcn.png',
-            content: comment.content,
-            likes: comment.likesCount || 0,
-            isLiked: false // Backend não retorna esse campo ainda
-          }))
-        })),
+            userId: comment.userId || comment.UserId || '',
+            name: comment.name || comment.Name || 'User',
+            userName: comment.userName || comment.UserName || 'user',
+            userImage: comment.userImage || comment.UserImage || DEFAULT_AVATAR,
+            content: comment.content || comment.Content || '',
+            createdAt: comment.createdAt || comment.CreatedAt || new Date().toISOString(),
+            likesCount: comment.likesCount || comment.LikesCount || 0,
+            commentsCount: comment.commentsCount || comment.CommentsCount || 0,
+            isLiked: comment.isLiked || false
+          })) : [];
+          
+          return {
+            ...post,
+            userImage,
+            comments
+          };
+        }),
         nextCursor: response.data.nextCursor
       };
       
